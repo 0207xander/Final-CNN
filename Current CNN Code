@@ -1,0 +1,254 @@
+import tensorflow as tf
+from tensorflow import keras
+from keras.models import Sequential
+from keras.layers import Dense, Flatten, Conv2D, MaxPooling2D, Dropout
+from tensorflow.keras import layers
+from keras.utils import to_categorical
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import figure
+plt.style.use('fivethirtyeight')
+import csv
+import math
+import tkinter
+from csv import reader
+import pandas as pd
+import matplotlib.colors
+import matplotlib.cm as cm
+from sklearn.model_selection import train_test_split
+import random
+import datetime
+
+color_max_pT=1000000.
+color_min_pT=30000.
+
+import uproot
+signal=uproot.open(r"new_TTHH.root")
+tree=signal["OutputTree"]
+branches = tree.arrays()
+numevents=len(branches["met"])
+
+eta_values_all = []
+phi_values_all = []
+pT_values_all = []
+  
+for j in range(1, 11):
+    pT_values_all.append(branches['jet' + str(j) + 'pT'])
+    eta_values_all.append(branches['jet' + str(j) + 'eta'])
+    phi_values_all.append(branches['jet' + str(j) + 'phi'])  
+
+
+    
+def makePlotFromEvent(eventnumber):
+    pT_values = [pT_values_all[k][eventnumber] for k in range(len(pT_values_all))]
+    eta_values= [eta_values_all[k][eventnumber] for k in range(len(eta_values_all))]
+    phi_values= [phi_values_all[k][eventnumber] for k in range(len(phi_values_all))]
+
+    points = None
+    points = list(zip(eta_values, phi_values, pT_values))
+
+    eta_array = np.array(eta_values)
+    phi_array = np.array(phi_values)
+    pT_array = np.array(pT_values)
+
+    # CODE TO CREATE THE 2D HISTOGRAM
+
+    eta_bin_size = 0.2
+    phi_bin_size = math.pi/20
+    eta_index = np.floor(eta_array / eta_bin_size).astype(int)
+    phi_index = np.floor(phi_array / phi_bin_size).astype(int)
+    eta_min, eta_max = np.min(-5), np.max(5)
+    phi_min, phi_max = np.min(-math.pi), np.max(math.pi)
+    num_eta_bins = int(2*eta_max/eta_bin_size)  #50
+    num_phi_bins = int(2*phi_max/phi_bin_size)  #40
+
+    array = np.zeros(shape = (num_eta_bins,num_phi_bins))
+    np.set_printoptions(threshold=np.inf)
+    larray=[]
+    for ie in range(num_eta_bins):
+        larray.append([])
+        for ip in range(num_phi_bins):
+            larray[ie].append([1.,1.,1.])
+
+    for i in range(0, len(pT_values)):
+        if pT_values[i] > 0:
+            #ptcolor_rgb=cm.Blues(min(math.log10(pT_values[i]/1000.-color_min_pT/1000.)/math.log10(color_max_pT/1000.),1.))[:3]
+            ptcolor_rgb=cm.Blues(min(pT_values[i]/color_max_pT,1.))[:3]
+            #print(ptcolor_rgb)
+            array[eta_index[i] + int(num_eta_bins / 2), phi_index[i] + int(num_phi_bins / 2)] = pT_values[i]             
+            larray[eta_index[i] + int(num_eta_bins / 2)][phi_index[i] + int(num_phi_bins / 2)] = ptcolor_rgb
+            #print(pT_values[i])
+
+    x,y = array.nonzero() #get the notzero indices
+    if False:
+        plt.scatter(x,y,c=array[x,y],s=50,cmap='winter',marker='s') #adjust the size to your needs
+        plt.xlim(0, 50)
+        plt.ylim(0, 40)
+        plt.colorbar()
+        plt.show()
+    return larray
+
+
+# loop over events
+larray=None
+for i in range(numevents):
+    
+    # just a way to only generate one event for now
+    if i>0: break
+
+    #print(pT_values)    # all pT arrays for all events
+    #print(pT_values[0]) # pT(j1) for all events
+    #print(pT_values[0][i]) # pT(j1) for i'th event
+    #print([pT_values[k][i] for k in range(len(pT_values))]) # [pT(j1), pT(j2), ..., pT(j10)] for i'th event
+    larray = makePlotFromEvent(i)
+    
+my_coords = makePlotFromEvent(1)   # larray
+print(my_coords)
+
+def copy_event(event):       # copy larray
+    newevent=[]
+    for i_eta in range(len(event)):
+        newevent.append([])
+        for i_phi in range(len(event[i_eta])):
+            newevent[i_eta].append(event[i_eta][i_phi])
+    return newevent
+
+copied_event=copy_event(my_coords)
+print(copied_event)
+
+def flip_eta(event, sign):            # flip larray
+    output=copy_event(event)
+    for i_eta in range(len(event)):
+        for i_phi in range(len(event[i_eta])):
+            if sign<0:
+                output[len(event)-i_eta-1][i_phi]=event[i_eta][i_phi]
+            else:
+                output[i_eta][i_phi]=event[i_eta][i_phi]
+    return output
+
+def shift_phi(event, phishift):       # shift larray
+    output=copy_event(event)
+    for i_eta in range(len(event)):
+        for i_phi in range(len(event[i_eta])):
+            output[i_eta][(i_phi-phishift)%len(event[i_eta])]=event[i_eta][i_phi]
+    return output
+    
+x = np.zeros(shape=(500000, 50, 40, 3))           # create as empty numpy array with 1 mil elements
+flipped_events = []
+shifted_events = []
+
+start_time = datetime.datetime.now()
+iter = 250000
+for i in range(0, 3125):
+    begin_time = datetime.datetime.now()
+    mc_event = makePlotFromEvent(i)
+    for j in range(0, 40):
+        shifted_events = shift_phi(mc_event, j)
+        x[i * 80 + j] = shifted_events
+        flip_shifted_events = flip_eta(shifted_events, -1)
+        x[i * 80 + (j + 1)] = flip_shifted_events
+    event_time=(datetime.datetime.now()-begin_time).total_seconds()
+    if event_time > 1:
+        print(event_time)
+    
+print(datetime.datetime.now() - start_time)
+    
+print(len(x))                  
+
+rows, cols = (iter, 1)
+y=np.array([[1] for i in range(iter)])
+
+background=uproot.open(r"new_TTBB.root")
+tree=background["OutputTree"]
+branches = tree.arrays()
+
+start_time = datetime.datetime.now()
+iter = 250000
+for i in range(0, 3125):
+    begin_time = datetime.datetime.now()
+    mc_event = makePlotFromEvent(i)
+    for j in range(0, 40):
+        shifted_events = shift_phi(mc_event, j)    # try shift_phi(mc_event, j)
+        x[250000 + (i * 80 + j)] = shifted_events
+        flip_shifted_events = flip_eta(shifted_events, -1)
+        x[250000 + (i * 80 + (j + 1))] = flip_shifted_events
+    event_time=(datetime.datetime.now()-begin_time).total_seconds()
+    if event_time > 1:
+        print(event_time)
+    
+print(datetime.datetime.now() - start_time)
+    
+print(len(x))     
+
+rows, cols = (iter, 1)
+y2=np.array([[0] for i in range(iter)]) # append, not replace
+y = np.concatenate((y, y2))
+# print(y)
+
+index = 15
+classification = ['background', 'signal']
+print('The image classification is:', classification[y[index][0]])
+
+#Create the models architecture
+
+model = Sequential()
+
+#Add the first layer
+model.add( Conv2D(128, (3,3), activation='relu', input_shape=(50,40,3)) )
+
+#Add a pooling layer
+model.add(MaxPooling2D(pool_size = (2,2)))
+
+#Add another convolutional layer
+model.add( Conv2D(128, (3,3), activation='relu') )
+
+#Add another pooling layer
+model.add(MaxPooling2D(pool_size = (2,2)))
+
+#Add another convolutional layer
+model.add( Conv2D(128, (3,3), activation='relu') )
+
+#Add another pooling layer
+model.add(MaxPooling2D(pool_size = (2,2)))
+
+#Add a flattening layer
+model.add(Flatten())
+
+#Add a layer with 1000 neurons
+model.add(Dense(1000, activation='relu'))
+
+#Add a dropout layer
+model.add(Dropout(0.5))
+
+#Add a layer with 500 neurons
+model.add(Dense(500, activation='relu'))
+
+#Add a dropout layer
+model.add(Dropout(0.5))
+
+#Add a layer with 250 neurons
+#model.add(Dense(250, activation='relu'))
+
+#Add an output layer with 1 neuron
+model.add(Dense(1, activation='sigmoid'))
+
+#Compile the model
+
+opt = tf.keras.optimizers.SGD(learning_rate=0.20, momentum=0.1, nesterov=False, name="SGD")
+
+model.compile(loss = 'binary_crossentropy',
+             optimizer = opt,
+             metrics = ['accuracy'])
+             
+# Use train_test_split to randomize the events into training sets and test sets
+
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.05, random_state=42)
+
+# Train the model with our data
+
+model.summary()
+
+hist = model.fit(x_train, y_train,
+                batch_size = 100,
+                epochs = 100,
+                validation_split = 0.2)
