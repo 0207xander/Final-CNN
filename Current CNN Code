@@ -18,12 +18,14 @@ import matplotlib.cm as cm
 from sklearn.model_selection import train_test_split
 import random
 import datetime
+import random
 
 color_max_pT=1000000.
 color_min_pT=30000.
 
 import uproot
-signal=uproot.open(r"new_TTHH.root")
+filename = r'new_TTHH.root'
+signal=uproot.open(filename)
 tree=signal["OutputTree"]
 branches = tree.arrays()
 numevents=len(branches["met"])
@@ -31,12 +33,21 @@ numevents=len(branches["met"])
 eta_values_all = []
 phi_values_all = []
 pT_values_all = []
+b_values_all = []
+
+eta_bin_size = 0.2
+phi_bin_size = math.pi/20
+eta_min, eta_max = np.min(-5), np.max(5)
+phi_min, phi_max = np.min(-math.pi), np.max(math.pi)
+num_eta_bins = int(2*eta_max/eta_bin_size)  #50
+num_phi_bins = int(2*phi_max/phi_bin_size)  #40
+num_rand_pixels = 5
   
 for j in range(1, 11):
     pT_values_all.append(branches['jet' + str(j) + 'pT'])
     eta_values_all.append(branches['jet' + str(j) + 'eta'])
     phi_values_all.append(branches['jet' + str(j) + 'phi'])  
-
+    b_values_all.append(branches['jet' + str(j) + 'btag'])
 
     
 def makePlotFromEvent(eventnumber):
@@ -50,17 +61,13 @@ def makePlotFromEvent(eventnumber):
     eta_array = np.array(eta_values)
     phi_array = np.array(phi_values)
     pT_array = np.array(pT_values)
+    
+    #njets = 0
 
     # CODE TO CREATE THE 2D HISTOGRAM
 
-    eta_bin_size = 0.2
-    phi_bin_size = math.pi/20
     eta_index = np.floor(eta_array / eta_bin_size).astype(int)
     phi_index = np.floor(phi_array / phi_bin_size).astype(int)
-    eta_min, eta_max = np.min(-5), np.max(5)
-    phi_min, phi_max = np.min(-math.pi), np.max(math.pi)
-    num_eta_bins = int(2*eta_max/eta_bin_size)  #50
-    num_phi_bins = int(2*phi_max/phi_bin_size)  #40
 
     array = np.zeros(shape = (num_eta_bins,num_phi_bins))
     np.set_printoptions(threshold=np.inf)
@@ -68,16 +75,28 @@ def makePlotFromEvent(eventnumber):
     for ie in range(num_eta_bins):
         larray.append([])
         for ip in range(num_phi_bins):
-            larray[ie].append([1.,1.,1.])
+            larray[ie].append([1.,1.,1.])                
 
     for i in range(0, len(pT_values)):
+        #if filename == r'new_TTHH.root':
         if pT_values[i] > 0:
-            #ptcolor_rgb=cm.Blues(min(math.log10(pT_values[i]/1000.-color_min_pT/1000.)/math.log10(color_max_pT/1000.),1.))[:3]
             ptcolor_rgb=cm.Blues(min(pT_values[i]/color_max_pT,1.))[:3]
-            #print(ptcolor_rgb)
             array[eta_index[i] + int(num_eta_bins / 2), phi_index[i] + int(num_phi_bins / 2)] = pT_values[i]             
             larray[eta_index[i] + int(num_eta_bins / 2)][phi_index[i] + int(num_phi_bins / 2)] = ptcolor_rgb
-            #print(pT_values[i])
+            #njets += 1
+#         else:
+#              if pT_values[i] > 0:
+#                 ptcolor_rgb=cm.Blues(min(pT_values[i]/color_max_pT,1.))[:3]
+#                 array[eta_index[i] + int(num_eta_bins / 2), phi_index[i] + int(num_phi_bins / 2)] = pT_values[i]             
+#                 larray[eta_index[i] + int(num_eta_bins / 2)][phi_index[i] + int(num_phi_bins / 2)] = [0, 0, 0]
+                
+    if filename == r'new_TTHH.root':
+        for i in range(num_eta_bins):
+            for j in range(num_phi_bins):
+                chance = random.random()
+                if chance < 0.001:                     
+                    larray[i][j] = [0, 0, 0]
+            
 
     x,y = array.nonzero() #get the notzero indices
     if False:
@@ -86,6 +105,7 @@ def makePlotFromEvent(eventnumber):
         plt.ylim(0, 40)
         plt.colorbar()
         plt.show()
+
     return larray
 
 
@@ -102,92 +122,57 @@ for i in range(numevents):
     #print([pT_values[k][i] for k in range(len(pT_values))]) # [pT(j1), pT(j2), ..., pT(j10)] for i'th event
     larray = makePlotFromEvent(i)
     
-my_coords = makePlotFromEvent(1)   # larray
-print(my_coords)
+    # make x a dictionary and update the values
 
-def copy_event(event):       # copy larray
-    newevent=[]
-    for i_eta in range(len(event)):
-        newevent.append([])
-        for i_phi in range(len(event[i_eta])):
-            newevent[i_eta].append(event[i_eta][i_phi])
-    return newevent
-
-copied_event=copy_event(my_coords)
-print(copied_event)
-
-def flip_eta(event, sign):            # flip larray
-    output=copy_event(event)
-    for i_eta in range(len(event)):
-        for i_phi in range(len(event[i_eta])):
-            if sign<0:
-                output[len(event)-i_eta-1][i_phi]=event[i_eta][i_phi]
-            else:
-                output[i_eta][i_phi]=event[i_eta][i_phi]
-    return output
-
-def shift_phi(event, phishift):       # shift larray
-    output=copy_event(event)
-    for i_eta in range(len(event)):
-        for i_phi in range(len(event[i_eta])):
-            output[i_eta][(i_phi-phishift)%len(event[i_eta])]=event[i_eta][i_phi]
-    return output
-    
-x = np.zeros(shape=(500000, 50, 40, 3))           # create as empty numpy array with 1 mil elements
+x = np.zeros(shape=(50000, 50, 40, 3))           # create as empty numpy array with 1 mil elements
 flipped_events = []
 shifted_events = []
+signal_njets_list = []
 
+iter = 25000
 start_time = datetime.datetime.now()
-iter = 250000
-for i in range(0, 3125):
+for i in range(0, iter):
     begin_time = datetime.datetime.now()
-    mc_event = makePlotFromEvent(i)
-    for j in range(0, 40):
-        shifted_events = shift_phi(mc_event, j)
-        x[i * 80 + j] = shifted_events
-        flip_shifted_events = flip_eta(shifted_events, -1)
-        x[i * 80 + (j + 1)] = flip_shifted_events
+    larray = makePlotFromEvent(i)
+    mc_event = np.array(larray)
+    x[i] = mc_event
+    #signal_njets_list.append(njets)
     event_time=(datetime.datetime.now()-begin_time).total_seconds()
-    if event_time > 1:
-        print(event_time)
     
 print(datetime.datetime.now() - start_time)
-    
-print(len(x))                  
-
-rows, cols = (iter, 1)
 y=np.array([[1] for i in range(iter)])
 
-background=uproot.open(r"new_TTBB.root")
+filename = r'new_TTBB.root'
+background=uproot.open(filename)
 tree=background["OutputTree"]
 branches = tree.arrays()
 
-start_time = datetime.datetime.now()
-iter = 250000
-for i in range(0, 3125):
-    begin_time = datetime.datetime.now()
-    mc_event = makePlotFromEvent(i)
-    for j in range(0, 40):
-        shifted_events = shift_phi(mc_event, j)    # try shift_phi(mc_event, j)
-        x[250000 + (i * 80 + j)] = shifted_events
-        flip_shifted_events = flip_eta(shifted_events, -1)
-        x[250000 + (i * 80 + (j + 1))] = flip_shifted_events
-    event_time=(datetime.datetime.now()-begin_time).total_seconds()
-    if event_time > 1:
-        print(event_time)
-    
-print(datetime.datetime.now() - start_time)
-    
-print(len(x))     
+eta_values_all = []
+phi_values_all = []
+pT_values_all = []
+b_values_all = []
 
+for j in range(1, 11):
+    pT_values_all.append(branches['jet' + str(j) + 'pT'])
+    eta_values_all.append(branches['jet' + str(j) + 'eta'])
+    phi_values_all.append(branches['jet' + str(j) + 'phi'])  
+    b_values_all.append(branches['jet' + str(j) + 'btag'])
+    
+background_njets_list = []
+
+start_time = datetime.datetime.now()
+for i in range(0, iter):
+    begin_time = datetime.datetime.now()
+    larray = makePlotFromEvent(i)
+    mc_event2 = larray
+    x[i + iter] = mc_event2
+    #background_njets_list.append(njets)
+    event_time=(datetime.datetime.now()-begin_time).total_seconds()
+
+print(datetime.datetime.now() - start_time)
 rows, cols = (iter, 1)
 y2=np.array([[0] for i in range(iter)]) # append, not replace
 y = np.concatenate((y, y2))
-# print(y)
-
-index = 15
-classification = ['background', 'signal']
-print('The image classification is:', classification[y[index][0]])
 
 #Create the models architecture
 
@@ -234,7 +219,7 @@ model.add(Dense(1, activation='sigmoid'))
 
 #Compile the model
 
-opt = tf.keras.optimizers.SGD(learning_rate=0.20, momentum=0.1, nesterov=False, name="SGD")
+opt = tf.keras.optimizers.Adam()
 
 model.compile(loss = 'binary_crossentropy',
              optimizer = opt,
@@ -248,7 +233,26 @@ x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.05, random
 
 model.summary()
 
-hist = model.fit(x_train, y_train,
+history = model.fit(x_train, y_train,
                 batch_size = 100,
-                epochs = 100,
+                epochs = 5,
                 validation_split = 0.2)
+
+# list all data in history
+print(history.history.keys())
+# summarize history for accuracy
+plt.plot(history.history['accuracy'])
+plt.plot(history.history['val_accuracy'])
+plt.title('model accuracy')
+plt.ylabel('accuracy')
+plt.xlabel('epoch')
+plt.legend(['train', 'test'], loc='upper left')
+plt.show()
+# summarize history for loss
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.title('model loss')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['train', 'test'], loc='upper left')
+plt.show()
