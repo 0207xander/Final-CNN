@@ -54,6 +54,7 @@ def makePlotFromEvent(eventnumber):
     pT_values = [pT_values_all[k][eventnumber] for k in range(len(pT_values_all))]
     eta_values= [eta_values_all[k][eventnumber] for k in range(len(eta_values_all))]
     phi_values= [phi_values_all[k][eventnumber] for k in range(len(phi_values_all))]
+    b_values = [b_values_all[k][eventnumber] for k in range(len(b_values_all))]
 
     points = None
     points = list(zip(eta_values, phi_values, pT_values))
@@ -61,8 +62,7 @@ def makePlotFromEvent(eventnumber):
     eta_array = np.array(eta_values)
     phi_array = np.array(phi_values)
     pT_array = np.array(pT_values)
-    
-    #njets = 0
+    b_array = np.array(b_values)
 
     # CODE TO CREATE THE 2D HISTOGRAM
 
@@ -78,23 +78,19 @@ def makePlotFromEvent(eventnumber):
             larray[ie].append([1.,1.,1.])                
 
     for i in range(0, len(pT_values)):
-        #if filename == r'new_TTHH.root':
         if pT_values[i] > 0:
-            ptcolor_rgb=cm.Blues(min(pT_values[i]/color_max_pT,1.))[:3]
+            if b_values[i] == 0:
+                ptcolor_rgb=[pT_values[i]/color_max_pT,0.,0.]
+            else:
+                ptcolor_rgb=[0.,pT_values[i]/color_max_pT,0.]
             array[eta_index[i] + int(num_eta_bins / 2), phi_index[i] + int(num_phi_bins / 2)] = pT_values[i]             
             larray[eta_index[i] + int(num_eta_bins / 2)][phi_index[i] + int(num_phi_bins / 2)] = ptcolor_rgb
-            #njets += 1
-#         else:
-#              if pT_values[i] > 0:
-#                 ptcolor_rgb=cm.Blues(min(pT_values[i]/color_max_pT,1.))[:3]
-#                 array[eta_index[i] + int(num_eta_bins / 2), phi_index[i] + int(num_phi_bins / 2)] = pT_values[i]             
-#                 larray[eta_index[i] + int(num_eta_bins / 2)][phi_index[i] + int(num_phi_bins / 2)] = [0, 0, 0]
                 
     if filename == r'new_TTHH.root':
         for i in range(num_eta_bins):
             for j in range(num_phi_bins):
                 chance = random.random()
-                if chance < 0.001:                     
+                if chance < 0:                     
                     larray[i][j] = [0, 0, 0]
             
 
@@ -112,14 +108,7 @@ def makePlotFromEvent(eventnumber):
 # loop over events
 larray=None
 for i in range(numevents):
-    
-    # just a way to only generate one event for now
     if i>0: break
-
-    #print(pT_values)    # all pT arrays for all events
-    #print(pT_values[0]) # pT(j1) for all events
-    #print(pT_values[0][i]) # pT(j1) for i'th event
-    #print([pT_values[k][i] for k in range(len(pT_values))]) # [pT(j1), pT(j2), ..., pT(j10)] for i'th event
     larray = makePlotFromEvent(i)
     
     # make x a dictionary and update the values
